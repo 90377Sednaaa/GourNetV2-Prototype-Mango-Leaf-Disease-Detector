@@ -33,13 +33,13 @@ def format_consensus_data(
     agreed = pred_a == pred_b
     if agreed:
         title = f"Consensus Reached: Both models predict {pred_a}"
-        detail = f"{short_a} ({conf_a * 100:.1f}%) vs {short_b} ({conf_b * 100:.1f}%)"
+        detail = f"<strong>{short_a}</strong> ({conf_a * 100:.1f}%) vs <strong>{short_b}</strong> ({conf_b * 100:.1f}%)"
         css_class = "consensus-banner"
     else:
         title = "Models Disagree — Further Diagnostic Review Recommended"
         detail = (
-            f"**{short_a}**: {pred_a} ({conf_a * 100:.1f}%) vs "
-            f"**{short_b}**: {pred_b} ({conf_b * 100:.1f}%)"
+            f"<strong>{short_a}</strong>: {pred_a} ({conf_a * 100:.1f}%) vs "
+            f"<strong>{short_b}</strong>: {pred_b} ({conf_b * 100:.1f}%)"
         )
         css_class = "divergence-banner"
 
@@ -207,6 +207,14 @@ def render_model_card(
     class_names: list,
 ):
     """Renders a single model's prediction card with top class, metrics, and top-k breakdown."""
+    if not res or res.get("probs") is None:
+        with st.container(border=True):
+            st.subheader(short_name)
+            if full_name and full_name != short_name:
+                st.caption(full_name)
+            st.info("No prediction data available.")
+        return
+
     probs = res.get("probs")
     ms = res.get("ms", 0.0)
     stats = res.get("stats")
@@ -271,7 +279,7 @@ def render_model_card(
                     "Confidence",
                     min_value=0.0,
                     max_value=1.0,
-                    format="%.2f",
+                    format="percent",
                 ),
             },
         )

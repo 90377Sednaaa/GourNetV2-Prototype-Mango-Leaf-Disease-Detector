@@ -107,6 +107,9 @@ class TestUIComponents(unittest.TestCase):
             },
         }
         render_model_card("GourNet v2", "GourNet v2 (enhanced)", res, 3, class_names)
+        # Test edge case: empty or None res
+        render_model_card("GourNet v2", "GourNet v2 (enhanced)", {}, 3, class_names)
+        render_model_card("GourNet v2", "GourNet v2 (enhanced)", None, 3, class_names)
 
 
 if __name__ == "__main__":
