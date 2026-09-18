@@ -196,6 +196,8 @@ def main():
         samples = get_sample_images(SAMPLES_DIR)
         img = None
         img_source_desc = None
+        target_file = None
+        source_mode = "Upload Image"
 
         if samples:
             source_mode = st.radio(
@@ -203,49 +205,39 @@ def main():
                 ["Upload Image", "Select Sample Preset"],
                 horizontal=True,
             )
-            if source_mode == "Upload Image":
-                uploaded = st.file_uploader(
-                    "Upload a mango leaf photo",
-                    type=["jpg", "jpeg", "png"],
-                    key="single_image_uploader",
-                )
-                if uploaded is not None:
-                    try:
-                        img = Image.open(uploaded)
-                        img_source_desc = f"Uploaded: {uploaded.name}"
-                    except Exception as e:
-                        st.error(f"Error loading uploaded image: {e}")
-            else:
+            if source_mode == "Select Sample Preset":
                 selected_sample = st.selectbox(
                     "Choose a preset sample image:",
                     samples,
                     format_func=lambda p: p.name,
                 )
                 if selected_sample:
-                    try:
-                        img = Image.open(selected_sample)
-                        img_source_desc = f"Sample preset: {selected_sample.name}"
-                    except Exception as e:
-                        st.error(f"Error loading sample image: {e}")
+                    target_file = selected_sample
+                    img_source_desc = f"Sample preset: {selected_sample.name}"
         else:
-            uploaded = st.file_uploader(
-                "Upload a mango leaf photo",
-                type=["jpg", "jpeg", "png"],
-                key="single_image_uploader",
-            )
-            if uploaded is not None:
-                try:
-                    img = Image.open(uploaded)
-                    img_source_desc = f"Uploaded: {uploaded.name}"
-                except Exception as e:
-                    st.error(f"Error loading uploaded image: {e}")
-
             with st.expander("ℹ️ How to use sample presets", expanded=False):
                 st.markdown(
                     "Place `.jpg`, `.jpeg`, or `.png` images into the `samples/` directory "
                     "to quickly select and test presets from this interface without re-uploading. "
                     "See `samples/README.md` for guidelines."
                 )
+
+        if source_mode == "Upload Image":
+            uploaded = st.file_uploader(
+                "Upload a mango leaf photo",
+                type=["jpg", "jpeg", "png"],
+                key="single_image_uploader",
+            )
+            if uploaded is not None:
+                target_file = uploaded
+                img_source_desc = f"Uploaded: {uploaded.name}"
+
+        if target_file is not None:
+            try:
+                img = Image.open(target_file)
+            except Exception as e:
+                name = getattr(target_file, "name", str(target_file))
+                st.error(f"Error loading image ({name}): {e}")
 
         if img is None:
             st.info("Upload or select a mango leaf photo above to begin comparative inference.")
@@ -417,8 +409,6 @@ def main():
 
                 if records:
                     res_df = pd.DataFrame(records)
-                    truth = {r["File"]: r["True label"] for r in edited.to_dict("records")}
-                    res_df["True label"] = res_df["File"].map(truth)
                     res_df["Agree"] = res_df[f"{MODEL_REGISTRY[a_key]['short']} pred"] == res_df[
                         f"{MODEL_REGISTRY[b_key]['short']} pred"
                     ]
@@ -432,8 +422,8 @@ def main():
                 res_df["True label"] = res_df["File"].map(truth)
 
                 scored = res_df[
-                (res_df["True label"] != "Unknown") & res_df["True label"].notna()
-            ]
+                    (res_df["True label"] != "Unknown") & res_df["True label"].notna()
+                ]
                 with st.container(horizontal=True):
                     st.metric("Total Images", str(len(res_df)), border=True)
                     st.metric("Agreement Rate", f"{res_df['Agree'].mean() * 100:.1f}%", border=True)
@@ -490,9 +480,9 @@ def main():
         specs_data = [
             {"Specification": "Parameters", "GourNet (Baseline)": params_a_str, "GourNet v2 (Enhanced)": params_b_str},
             {"Specification": "Size on Disk", "GourNet (Baseline)": size_a_str, "GourNet v2 (Enhanced)": size_b_str},
-            {"Specification": "Normalization", "GourNet (Baseline)": "None", "GourNet v2 (Enhanced)": "Group Normalization (groups=8/16/32)"},
-            {"Specification": "Classifier / Pooling", "GourNet (Baseline)": "Flatten + Dense(128)", "GourNet v2 (Enhanced)": "GlobalAveragePooling2D"},
-            {"Specification": "Regularization", "GourNet (Baseline)": "None", "GourNet v2 (Enhanced)": "Dropout (0.3)"},
+            {"Specification": "Normalization", "GourNet (Baseline)": "None", "GourNet v2 (Enhanced)": "Group Normalization (groups=8)"},
+            {"Specification": "Classifier / Pooling", "GourNet (Baseline)": "Flatten + Dense(64)", "GourNet v2 (Enhanced)": "GlobalAveragePooling2D + Dense(64)"},
+            {"Specification": "Regularization", "GourNet (Baseline)": "None", "GourNet v2 (Enhanced)": "Spatial Dropout (0.2) + Head Dropout (0.4)"},
             {"Specification": "Input Resolution", "GourNet (Baseline)": "224 × 224 × 3", "GourNet v2 (Enhanced)": "224 × 224 × 3"},
             {"Specification": "Output Classes", "GourNet (Baseline)": "8 disease classes", "GourNet v2 (Enhanced)": "8 disease classes"},
             {"Specification": "Activation", "GourNet (Baseline)": "ReLU + Softmax", "GourNet v2 (Enhanced)": "ReLU + Softmax"},
@@ -507,21 +497,21 @@ def main():
             with st.container(border=True):
                 st.markdown("**1. Group Normalization**")
                 st.caption(
-                    "Replaces standard batch-dependent normalization with intra-channel group divisions. "
+                    "Replaces standard batch-dependent normalization with intra-channel group divisions (Group Normalization (groups=8) uniform across all 4 blocks). "
                     "Ensures stable activations and robust feature representations even during single-image edge inferences."
                 )
         with c_innov2:
             with st.container(border=True):
                 st.markdown("**2. Global Average Pooling**")
                 st.caption(
-                    "Replaces the heavy Flatten + Dense(128) layers with spatial average pooling. "
-                    "Eliminates ~580,000 parameters and prevents spatial overfitting."
+                    "Replaces the heavy Flatten + Dense(64) layers with spatial average pooling. "
+                    "Eliminates ~585,000 parameters and prevents spatial overfitting."
                 )
         with c_innov3:
             with st.container(border=True):
                 st.markdown("**3. Dropout Regularization**")
                 st.caption(
-                    "Incorporates 30% dropout rate prior to final softmax classification. "
+                    "Incorporates Spatial Dropout (0.2) + Head Dropout (0.4) prior to final softmax classification. "
                     "Prevents co-adaptation of features and provides superior generalization on unseen leaf samples."
                 )
 

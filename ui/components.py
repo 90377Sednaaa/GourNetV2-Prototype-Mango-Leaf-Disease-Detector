@@ -56,7 +56,7 @@ def render_hero_header():
     st.markdown(
         """
         <div style="margin-bottom: 0.75rem;">
-            <h1 style="margin: 0; padding: 0; font-size: 2.2rem; font-weight: 700; color: #0F5132; display: flex; align-items: center; gap: 0.5rem;">
+            <h1 style="margin: 0; padding: 0; font-size: 2.2rem; font-weight: 700; color: var(--hero-title-color, #0F5132); display: flex; align-items: center; gap: 0.5rem;">
                 🌿 GourNet Mango Leaf Disease Detector
             </h1>
             <p class="header-subtext" style="margin-top: 0.35rem;">
@@ -93,7 +93,7 @@ def render_model_status_ribbon(
             with st.container(border=True):
                 header_html = f"""
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
-                    <span style="font-weight: 700; font-size: 1.1rem; color: #0F172A;">{short_name}</span>
+                    <span style="font-weight: 700; font-size: 1.1rem; color: inherit;">{short_name}</span>
                     <span class="status-pill{' warning' if not is_trained else ''}">
                         {'● Trained' if is_trained else '⚠ Fallback / Missing'}
                     </span>

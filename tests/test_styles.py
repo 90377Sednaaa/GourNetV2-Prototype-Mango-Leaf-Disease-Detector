@@ -16,5 +16,14 @@ class TestBotanicalStyles(unittest.TestCase):
         # Check botanical color tokens
         self.assertTrue("#0F5132" in css or "#166534" in css or "#10B981" in css)
 
+    def test_dark_mode_support(self):
+        css = get_botanical_css()
+        self.assertIn("@media (prefers-color-scheme: dark)", css)
+        self.assertIn('[data-theme="dark"]', css)
+        self.assertIn("--header-subtext-color", css)
+        self.assertIn("--status-pill-color", css)
+        self.assertIn("--consensus-color", css)
+        self.assertIn("--divergence-color", css)
+
 if __name__ == "__main__":
     unittest.main()
