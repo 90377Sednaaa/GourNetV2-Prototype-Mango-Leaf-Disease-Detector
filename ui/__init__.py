@@ -9,6 +9,7 @@ from ui.components import (
     render_consensus_banner,
     render_comparative_ribbon,
     render_model_card,
+    render_gradcam_section,
 )
 
 __all__ = [
@@ -21,4 +22,5 @@ __all__ = [
     "render_consensus_banner",
     "render_comparative_ribbon",
     "render_model_card",
+    "render_gradcam_section",
 ]
