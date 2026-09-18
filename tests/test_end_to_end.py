@@ -10,6 +10,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 import app
+from models.gradcam import generate_gradcam_heatmap, overlay_gradcam
 
 
 class TestEndToEnd(unittest.TestCase):
@@ -77,6 +78,36 @@ class TestEndToEnd(unittest.TestCase):
         self.assertGreater(size_base, 0)
         self.assertGreater(size_v2, 0)
 
+    def test_end_to_end_gradcam_real_weights(self):
+        # Create a synthetic mango leaf image
+        img = Image.new("RGB", (224, 224), color=(34, 139, 34))
+        batch = app.preprocess_image(img)
+
+        for variant in ["Standard", "12k"]:
+            for key in app.MODEL_KEYS:
+                model, ok = app.load_model(key, variant)
+                self.assertTrue(ok, f"Model {key} ({variant}) should load successfully")
+
+                # Verify Grad-CAM with auto prediction index
+                heatmap_auto = generate_gradcam_heatmap(model, batch)
+                self.assertEqual(heatmap_auto.shape, (224, 224))
+                self.assertEqual(heatmap_auto.dtype, np.float32)
+                self.assertGreaterEqual(float(np.min(heatmap_auto)), 0.0)
+                self.assertLessEqual(float(np.max(heatmap_auto)), 1.0)
+
+                # Verify Grad-CAM with explicit target class index
+                heatmap_explicit = generate_gradcam_heatmap(model, batch, pred_index=0)
+                self.assertEqual(heatmap_explicit.shape, (224, 224))
+                self.assertEqual(heatmap_explicit.dtype, np.float32)
+                self.assertGreaterEqual(float(np.min(heatmap_explicit)), 0.0)
+                self.assertLessEqual(float(np.max(heatmap_explicit)), 1.0)
+
+                # Verify overlay generation
+                overlay = overlay_gradcam(img, heatmap_auto, alpha=0.5, colormap_name="jet")
+                self.assertIsInstance(overlay, Image.Image)
+                self.assertEqual(overlay.size, img.size)
+
 
 if __name__ == "__main__":
     unittest.main()
+

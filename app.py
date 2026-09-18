@@ -24,6 +24,7 @@ from ui.components import (
     render_consensus_banner,
     render_comparative_ribbon,
     render_model_card,
+    render_gradcam_section,
 )
 
 WEIGHTS_DIR = APP_DIR / "weights"
@@ -305,6 +306,16 @@ def main():
                 b_margin=b_stats["margin"],
                 short_a=MODEL_REGISTRY[a_key]["short"],
                 short_b=MODEL_REGISTRY[b_key]["short"],
+            )
+
+            # Grad-CAM Explainability Section
+            render_gradcam_section(
+                img=img,
+                batch=batch,
+                models=models,
+                results=results,
+                class_names=CLASS_NAMES,
+                model_keys=MODEL_KEYS,
             )
 
             # Per-class probability horizontal bar chart
