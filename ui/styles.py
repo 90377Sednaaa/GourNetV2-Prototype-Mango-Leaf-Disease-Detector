@@ -118,6 +118,55 @@ def get_botanical_css() -> str:
         justify-content: space-between !important;
     }
 
+    /* Grad-CAM & Card Image Full-Width Alignment System */
+    [data-testid="column"] [data-testid="stFullScreenFrame"] {
+        width: 100% !important;
+        display: flex !important;
+        justify-content: center !important;
+    }
+
+    [data-testid="column"] [data-testid="stFullScreenFrame"] > div {
+        width: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+    }
+
+    [data-testid="column"] [data-testid="stImage"] {
+        width: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    [data-testid="column"] [data-testid="stImage"] > div,
+    [data-testid="column"] [data-testid="stImageContainer"] {
+        width: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+    }
+
+    [data-testid="column"] [data-testid="stImage"] img,
+    [data-testid="column"] [data-testid="stImageContainer"] img {
+        width: 100% !important;
+        max-width: 100% !important;
+        height: auto !important;
+        max-height: 420px !important;
+        object-fit: contain !important;
+        border-radius: 8px !important;
+        margin: 0 auto !important;
+        display: block !important;
+    }
+
+    [data-testid="column"] [data-testid="stImage"] [data-testid="stCaptionContainer"],
+    [data-testid="column"] [data-testid="stImageCaption"] {
+        text-align: center !important;
+        width: 100% !important;
+        margin-top: 0.35rem !important;
+    }
+
     /* Card Containers */
     .gournet-card {
         background: transparent;

@@ -150,6 +150,39 @@ def main():
         top_k = st.slider("Top-k classes per model", 1, 8, 3)
 
         st.divider()
+        st.markdown("### 🔥 Grad-CAM Explainability")
+        enable_gradcam = st.toggle(
+            "Enable Grad-CAM",
+            value=False,
+            key="sidebar_enable_gradcam",
+            help="Generate visual attention heatmaps explaining model predictions.",
+        )
+        if enable_gradcam:
+            target_choice = st.selectbox(
+                "Target Class",
+                options=["Top Predicted Class (Default)"] + CLASS_NAMES,
+                key="sidebar_gradcam_target_class",
+            )
+            gradcam_opacity = st.slider(
+                "Heatmap Opacity",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.5,
+                step=0.05,
+                key="sidebar_gradcam_opacity",
+            )
+            gradcam_colormap = st.selectbox(
+                "Colormap",
+                options=["jet", "viridis", "magma"],
+                index=0,
+                key="sidebar_gradcam_colormap",
+            )
+        else:
+            target_choice = "Top Predicted Class (Default)"
+            gradcam_opacity = 0.5
+            gradcam_colormap = "jet"
+
+        st.divider()
         st.markdown("### ℹ️ About Dataset")
         st.caption(
             "Designed for detection of 8 mango leaf health conditions:\n\n"
@@ -308,15 +341,20 @@ def main():
                 short_b=MODEL_REGISTRY[b_key]["short"],
             )
 
-            # Grad-CAM Explainability Section
-            render_gradcam_section(
-                img=img,
-                batch=batch,
-                models=models,
-                results=results,
-                class_names=CLASS_NAMES,
-                model_keys=MODEL_KEYS,
-            )
+            # Grad-CAM Explainability Results (Enabled via Sidebar)
+            if enable_gradcam:
+                render_gradcam_section(
+                    img=img,
+                    batch=batch,
+                    models=models,
+                    results=results,
+                    class_names=CLASS_NAMES,
+                    model_keys=MODEL_KEYS,
+                    target_choice=target_choice,
+                    opacity=gradcam_opacity,
+                    colormap=gradcam_colormap,
+                    show_controls=False,
+                )
 
             # Per-class probability horizontal bar chart
             st.subheader("Per-class probabilities")

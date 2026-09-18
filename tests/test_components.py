@@ -180,6 +180,38 @@ class TestUIComponents(unittest.TestCase):
         with patch("streamlit.toggle", return_value=True):
             render_gradcam_section(None, None, {}, {}, [], [])
 
+    def test_render_gradcam_section_external_controls_results_only(self):
+        img = Image.new("RGB", (224, 224), color=(0, 128, 0))
+        batch = np.zeros((1, 224, 224, 3), dtype=np.float32)
+        class_names = ["Anthracnose", "Healthy"]
+        model_keys = ["GourNet (baseline)", "GourNet v2 (enhanced)"]
+        models = {model_keys[0]: self.m_base, model_keys[1]: self.m_v2}
+        results = {
+            model_keys[0]: {
+                "probs": np.array([0.2, 0.8]),
+                "ms": 12.0,
+                "stats": {"top_idx": 1, "conf": 0.8, "margin": 0.6, "entropy": 0.5, "order": np.array([1, 0])},
+            },
+            model_keys[1]: {
+                "probs": np.array([0.1, 0.9]),
+                "ms": 10.0,
+                "stats": {"top_idx": 1, "conf": 0.9, "margin": 0.8, "entropy": 0.3, "order": np.array([1, 0])},
+            },
+        }
+        # When show_controls=False, should directly render cards with specified settings
+        render_gradcam_section(
+            img=img,
+            batch=batch,
+            models=models,
+            results=results,
+            class_names=class_names,
+            model_keys=model_keys,
+            target_choice="Healthy",
+            opacity=0.6,
+            colormap="magma",
+            show_controls=False,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

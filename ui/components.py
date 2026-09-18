@@ -298,6 +298,94 @@ def _format_model_name(key: str) -> str:
     return key
 
 
+def _render_gradcam_cards(
+    img: Image.Image,
+    batch: np.ndarray,
+    models: dict,
+    results: dict,
+    class_names: list,
+    model_keys: list,
+    target_choice: str,
+    opacity: float,
+    colormap: str,
+):
+    """Computes and renders symmetrical side-by-side cards with full-width overlays and focus metrics."""
+    cam_data = {}
+    with st.spinner("Generating Grad-CAM heatmaps..."):
+        for key in model_keys:
+            model = models.get(key)
+            if model is None:
+                cam_data[key] = {"error": f"Model '{key}' is not available."}
+                continue
+
+            if target_choice == "Top Predicted Class (Default)":
+                top_idx = None
+                if results and key in results and isinstance(results[key], dict):
+                    res_k = results[key]
+                    if "stats" in res_k and "top_idx" in res_k["stats"]:
+                        top_idx = int(res_k["stats"]["top_idx"])
+                    elif "probs" in res_k and res_k["probs"] is not None:
+                        top_idx = int(np.argmax(res_k["probs"]))
+
+                target_idx = top_idx
+                if top_idx is not None and class_names and 0 <= top_idx < len(class_names):
+                    target_name = class_names[top_idx]
+                else:
+                    target_name = "Top Predicted"
+            else:
+                target_idx = class_names.index(target_choice) if (class_names and target_choice in class_names) else None
+                target_name = target_choice
+
+            try:
+                heatmap = generate_gradcam_heatmap(model, batch, pred_index=target_idx)
+                overlay = overlay_gradcam(img, heatmap, alpha=opacity, colormap_name=colormap)
+                peak = float(np.max(heatmap))
+                mean = float(np.mean(heatmap))
+                cam_data[key] = {
+                    "target_name": target_name,
+                    "overlay": overlay,
+                    "peak": peak,
+                    "mean": mean,
+                }
+            except Exception as e:
+                cam_data[key] = {
+                    "target_name": target_name,
+                    "error": str(e),
+                }
+
+    # Symmetrical side-by-side cards
+    cols = st.columns(len(model_keys)) if model_keys else st.columns(2)
+    for col, key in zip(cols, model_keys):
+        short_name = _format_model_name(key)
+        data = cam_data.get(key, {})
+        target_name = data.get("target_name", "N/A")
+
+        with col:
+            with st.container(border=True):
+                header_html = f"""
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <span style="font-weight: 700; font-size: 1.15rem; color: var(--text-color, inherit);">{short_name}</span>
+                    <span class="status-pill">{target_name}</span>
+                </div>
+                """
+                st.markdown(header_html, unsafe_allow_html=True)
+
+                if "error" in data:
+                    st.error(f"Grad-CAM error: {data['error']}")
+                elif "overlay" in data:
+                    display_img = data["overlay"].resize((448, 448), Image.Resampling.LANCZOS)
+                    st.image(
+                        display_img,
+                        caption=f"{short_name} Grad-CAM Overlay",
+                        use_container_width=True,
+                    )
+                    m1, m2 = st.columns(2)
+                    m1.metric("Peak Activation Intensity", f"{data['peak']:.2f}")
+                    m2.metric("Mean Activation Focus", f"{data['mean']:.2f}")
+
+    st.caption("🔴 **Red / Warm tones**: High activation salient regions • 🔵 **Blue / Cool tones**: Low activation background")
+
+
 def render_gradcam_section(
     img: Image.Image,
     batch: np.ndarray,
@@ -305,121 +393,87 @@ def render_gradcam_section(
     results: dict,
     class_names: list,
     model_keys: list,
+    target_choice: str = "Top Predicted Class (Default)",
+    opacity: float = 0.5,
+    colormap: str = "jet",
     key_prefix: str = "gradcam",
+    show_controls: bool = True,
 ):
     """
-    Renders side-by-side Grad-CAM explainability comparison with interactive controls.
+    Renders side-by-side Grad-CAM explainability comparison.
 
-    Provides a master toggle, target class selection, opacity slider, colormap choice,
-    and symmetrical side-by-side cards with activation metrics.
+    When show_controls is True, displays an inline toggle and parameter controls.
+    When show_controls is False (e.g. controls moved to sidebar), directly computes
+    and displays the symmetrical side-by-side heatmap cards and activation metrics.
     """
-    with st.container(border=True):
-        enable_gradcam = st.toggle(
-            "🔥 Enable Side-by-Side Grad-CAM Explainability",
-            value=False,
-            key=f"{key_prefix}_toggle",
-            help="Generate visual attention heatmaps explaining model predictions.",
-        )
-        if not enable_gradcam:
-            return
+    if show_controls:
+        with st.container(border=True):
+            enable_gradcam = st.toggle(
+                "🔥 Enable Side-by-Side Grad-CAM Explainability",
+                value=False,
+                key=f"{key_prefix}_toggle",
+                help="Generate visual attention heatmaps explaining model predictions.",
+            )
+            if not enable_gradcam:
+                return
 
+            if img is None or batch is None or not models:
+                st.info("Grad-CAM explainability requires an active input image and loaded models.")
+                return
+
+            # 3-column control bar / toolbar
+            ctrl1, ctrl2, ctrl3 = st.columns(3)
+            with ctrl1:
+                target_choice = st.selectbox(
+                    "Target Class",
+                    options=["Top Predicted Class (Default)"] + list(class_names),
+                    key=f"{key_prefix}_target_class",
+                )
+            with ctrl2:
+                opacity = st.slider(
+                    "Heatmap Opacity",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=0.5,
+                    step=0.05,
+                    key=f"{key_prefix}_opacity",
+                )
+            with ctrl3:
+                colormap = st.selectbox(
+                    "Colormap",
+                    options=["jet", "viridis", "magma"],
+                    key=f"{key_prefix}_colormap",
+                )
+
+            _render_gradcam_cards(
+                img=img,
+                batch=batch,
+                models=models,
+                results=results,
+                class_names=class_names,
+                model_keys=model_keys,
+                target_choice=target_choice,
+                opacity=opacity,
+                colormap=colormap,
+            )
+    else:
         if img is None or batch is None or not models:
             st.info("Grad-CAM explainability requires an active input image and loaded models.")
             return
 
-        # 3-column control bar / toolbar
-        ctrl1, ctrl2, ctrl3 = st.columns(3)
-        with ctrl1:
-            target_choice = st.selectbox(
-                "Target Class",
-                options=["Top Predicted Class (Default)"] + list(class_names),
-                key=f"{key_prefix}_target_class",
-            )
-        with ctrl2:
-            opacity = st.slider(
-                "Heatmap Opacity",
-                min_value=0.0,
-                max_value=1.0,
-                value=0.5,
-                step=0.05,
-                key=f"{key_prefix}_opacity",
-            )
-        with ctrl3:
-            colormap = st.selectbox(
-                "Colormap",
-                options=["jet", "viridis", "magma"],
-                key=f"{key_prefix}_colormap",
-            )
+        st.subheader("🔥 Grad-CAM Explainability Comparison")
+        st.caption(
+            f"Active target: **{target_choice}** • Colormap: `{colormap}` • Opacity: `{int(opacity * 100)}%` (Configured in Sidebar)"
+        )
 
-        # Compute Grad-CAM for each model
-        cam_data = {}
-        with st.spinner("Generating Grad-CAM heatmaps..."):
-            for key in model_keys:
-                model = models.get(key)
-                if model is None:
-                    cam_data[key] = {"error": f"Model '{key}' is not available."}
-                    continue
-
-                if target_choice == "Top Predicted Class (Default)":
-                    top_idx = None
-                    if results and key in results and isinstance(results[key], dict):
-                        res_k = results[key]
-                        if "stats" in res_k and "top_idx" in res_k["stats"]:
-                            top_idx = int(res_k["stats"]["top_idx"])
-                        elif "probs" in res_k and res_k["probs"] is not None:
-                            top_idx = int(np.argmax(res_k["probs"]))
-
-                    target_idx = top_idx
-                    if top_idx is not None and class_names and 0 <= top_idx < len(class_names):
-                        target_name = class_names[top_idx]
-                    else:
-                        target_name = "Top Predicted"
-                else:
-                    target_idx = class_names.index(target_choice) if (class_names and target_choice in class_names) else None
-                    target_name = target_choice
-
-                try:
-                    heatmap = generate_gradcam_heatmap(model, batch, pred_index=target_idx)
-                    overlay = overlay_gradcam(img, heatmap, alpha=opacity, colormap_name=colormap)
-                    peak = float(np.max(heatmap))
-                    mean = float(np.mean(heatmap))
-                    cam_data[key] = {
-                        "target_name": target_name,
-                        "overlay": overlay,
-                        "peak": peak,
-                        "mean": mean,
-                    }
-                except Exception as e:
-                    cam_data[key] = {
-                        "target_name": target_name,
-                        "error": str(e),
-                    }
-
-        # Symmetrical side-by-side cards
-        cols = st.columns(len(model_keys)) if model_keys else st.columns(2)
-        for col, key in zip(cols, model_keys):
-            short_name = _format_model_name(key)
-            data = cam_data.get(key, {})
-            target_name = data.get("target_name", "N/A")
-
-            with col:
-                with st.container(border=True):
-                    header_html = f"""
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                        <span style="font-weight: 700; font-size: 1.15rem; color: var(--text-color, inherit);">{short_name}</span>
-                        <span class="status-pill">{target_name}</span>
-                    </div>
-                    """
-                    st.markdown(header_html, unsafe_allow_html=True)
-
-                    if "error" in data:
-                        st.error(f"Grad-CAM error: {data['error']}")
-                    elif "overlay" in data:
-                        st.image(
-                            data["overlay"],
-                            caption=f"{short_name} Grad-CAM Overlay",
-                            use_container_width=True,
-                        )
-                        m1, m2 = st.columns(2)
-                        m1.metric("Peak Activation Intensity", f"{data['peak']:.2f}")
-                        m2.metric("Mean Activation Focus", f"{data['mean']:.2f}")
+        _render_gradcam_cards(
+            img=img,
+            batch=batch,
+            models=models,
+            results=results,
+            class_names=class_names,
+            model_keys=model_keys,
+            target_choice=target_choice,
+            opacity=opacity,
+            colormap=colormap,
+        )
