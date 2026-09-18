@@ -431,7 +431,9 @@ def main():
                 truth = {r["File"]: r["True label"] for r in edited.to_dict("records")}
                 res_df["True label"] = res_df["File"].map(truth)
 
-                scored = res_df[res_df["True label"] != "Unknown"]
+                scored = res_df[
+                (res_df["True label"] != "Unknown") & res_df["True label"].notna()
+            ]
                 with st.container(horizontal=True):
                     st.metric("Total Images", str(len(res_df)), border=True)
                     st.metric("Agreement Rate", f"{res_df['Agree'].mean() * 100:.1f}%", border=True)
