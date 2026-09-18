@@ -1,6 +1,7 @@
 """Mango leaf disease detector: side-by-side comparison of GourNet and GourNet v2."""
 
 import pathlib
+import sys
 import time
 
 import numpy as np
@@ -9,9 +10,12 @@ import streamlit as st
 import tensorflow as tf
 from PIL import Image
 
+APP_DIR = pathlib.Path(__file__).parent.resolve()
+if str(APP_DIR) not in sys.path:
+    sys.path.insert(0, str(APP_DIR))
+
 from models import build_gournet, build_gournet_v2
 
-APP_DIR = pathlib.Path(__file__).parent
 WEIGHTS_DIR = APP_DIR / "weights"
 
 IMG_SIZE = (224, 224)
@@ -59,15 +63,27 @@ st.set_page_config(
 def load_model(model_key: str, variant: str):
     """Load trained model for the selected weights variant, else build untrained architecture."""
     spec = MODEL_REGISTRY[model_key]
-    fallback = spec["builder"](num_classes=len(CLASS_NAMES), input_shape=IMG_SIZE + (3,))
     weights_path = spec["weights"][variant]
     if weights_path.exists():
         try:
-            return tf.keras.models.load_model(weights_path), True
+            m = tf.keras.models.load_model(weights_path)
+            ok = True
         except Exception as e:
             st.warning(f"Could not load {weights_path.name} ({e}).")
-            return fallback, False
-    return fallback, False
+            m = spec["builder"](num_classes=len(CLASS_NAMES), input_shape=IMG_SIZE + (3,))
+            ok = False
+    else:
+        m = spec["builder"](num_classes=len(CLASS_NAMES), input_shape=IMG_SIZE + (3,))
+        ok = False
+
+    # Warmup graph execution so cold-start initialization does not skew latency metrics
+    try:
+        dummy = np.zeros((1, *IMG_SIZE, 3), dtype="float32")
+        _ = m(dummy, training=False)
+    except Exception:
+        pass
+
+    return m, ok
 
 
 def model_static_info(model, weights_path: pathlib.Path):
@@ -80,14 +96,15 @@ def model_static_info(model, weights_path: pathlib.Path):
 
 
 def preprocess_image(img: Image.Image) -> np.ndarray:
-    img = img.convert("RGB").resize(IMG_SIZE)
+    img = img.convert("RGB").resize(IMG_SIZE, Image.Resampling.BILINEAR)
     arr = np.array(img).astype("float32")
     return np.expand_dims(arr, axis=0)
 
 
 def timed_predict(model, batch: np.ndarray):
     t0 = time.perf_counter()
-    probs = model.predict(batch, verbose=0)[0].astype(float)
+    raw = model(batch, training=False)
+    probs = raw.numpy()[0].astype(float)
     dt_ms = (time.perf_counter() - t0) * 1000.0
     return probs, dt_ms
 
@@ -141,6 +158,8 @@ if missing:
     st.warning(f"{variant} weights missing for: {', '.join(missing)}. Predictions are not valid.")
 else:
     st.success(f"{variant} weights loaded for both models.")
+    if variant == "12k":
+        st.caption("ℹ️ Note: GourNet (baseline) currently uses Standard weights for the 12k option; GourNet v2 uses distinct 12-seed trained weights.")
 
 uploaded = st.file_uploader("Upload a mango leaf photo", type=["jpg", "jpeg", "png"])
 
@@ -286,11 +305,18 @@ if multi:
         },
     )
 
-    if st.button("Run batch benchmark", icon=":material/play_arrow:"):
+    col_run, col_clear = st.columns([2, 5])
+    run_clicked = col_run.button("Run batch benchmark", icon=":material/play_arrow:")
+    if col_clear.button("Clear benchmark results", disabled="batch_results" not in st.session_state):
+        st.session_state.pop("batch_results", None)
+        st.rerun()
+
+    if run_clicked:
         records = []
         bar = st.progress(0, text="Running batch inference...")
         for i, f in enumerate(multi):
             try:
+                f.seek(0)
                 bimg = Image.open(f)
                 bbatch = preprocess_image(bimg)
             except Exception as e:
@@ -317,27 +343,33 @@ if multi:
             res_df["Agree"] = res_df[f"{MODEL_REGISTRY[a_key]['short']} pred"] == res_df[
                 f"{MODEL_REGISTRY[b_key]['short']} pred"
             ]
-
-            scored = res_df[res_df["True label"] != "Unknown"]
-            with st.container(horizontal=True):
-                st.metric("Images", str(len(res_df)), border=True)
-                st.metric("Agreement rate", f"{res_df['Agree'].mean() * 100:.1f}%", border=True)
-                for key in MODEL_KEYS:
-                    short = MODEL_REGISTRY[key]["short"]
-                    st.metric(f"{short} mean latency", f"{res_df[f'{short} ms'].mean():.0f} ms", border=True)
-            if len(scored):
-                with st.container(horizontal=True):
-                    for key in MODEL_KEYS:
-                        short = MODEL_REGISTRY[key]["short"]
-                        acc = (scored[f"{short} pred"] == scored["True label"]).mean() * 100
-                        st.metric(f"{short} accuracy (n={len(scored)})", f"{acc:.1f}%", border=True)
-            else:
-                st.info("Assign true labels above to score accuracy.")
-
-            st.dataframe(res_df, hide_index=True)
-            disagreements = res_df[~res_df["Agree"]]
-            if len(disagreements):
-                st.subheader("Disagreements")
-                st.dataframe(disagreements, hide_index=True)
+            st.session_state["batch_results"] = res_df
         else:
             st.error("No images could be processed.")
+
+    if "batch_results" in st.session_state:
+        res_df = st.session_state["batch_results"]
+        truth = {r["File"]: r["True label"] for r in edited.to_dict("records")}
+        res_df["True label"] = res_df["File"].map(truth)
+
+        scored = res_df[res_df["True label"] != "Unknown"]
+        with st.container(horizontal=True):
+            st.metric("Images", str(len(res_df)), border=True)
+            st.metric("Agreement rate", f"{res_df['Agree'].mean() * 100:.1f}%", border=True)
+            for key in MODEL_KEYS:
+                short = MODEL_REGISTRY[key]["short"]
+                st.metric(f"{short} mean latency", f"{res_df[f'{short} ms'].mean():.0f} ms", border=True)
+        if len(scored):
+            with st.container(horizontal=True):
+                for key in MODEL_KEYS:
+                    short = MODEL_REGISTRY[key]["short"]
+                    acc = (scored[f"{short} pred"] == scored["True label"]).mean() * 100
+                    st.metric(f"{short} accuracy (n={len(scored)})", f"{acc:.1f}%", border=True)
+        else:
+            st.info("Assign true labels above to score accuracy.")
+
+        st.dataframe(res_df, hide_index=True)
+        disagreements = res_df[~res_df["Agree"]]
+        if len(disagreements):
+            st.subheader("Disagreements")
+            st.dataframe(disagreements, hide_index=True)
