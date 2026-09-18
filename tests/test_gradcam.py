@@ -74,6 +74,18 @@ class TestGradCAM(unittest.TestCase):
         self.assertEqual(blended.size, (224, 224))
         self.assertEqual(blended.mode, "RGB")
 
+    def test_gradcam_determinism_training_false(self):
+        # Non-zero structured image to verify no random augmentation occurs
+        rng = np.random.default_rng(42)
+        batch = rng.uniform(0.0, 255.0, (1, 224, 224, 3)).astype(np.float32)
+        h1 = generate_gradcam_heatmap(self.m_base, batch, pred_index=0)
+        h2 = generate_gradcam_heatmap(self.m_base, batch, pred_index=0)
+        np.testing.assert_allclose(h1, h2, atol=1e-6, err_msg="Grad-CAM must be deterministic with training=False")
+
+        h_v2_1 = generate_gradcam_heatmap(self.m_v2, batch, pred_index=1)
+        h_v2_2 = generate_gradcam_heatmap(self.m_v2, batch, pred_index=1)
+        np.testing.assert_allclose(h_v2_1, h_v2_2, atol=1e-6, err_msg="GourNet v2 Grad-CAM must be deterministic")
+
 
 if __name__ == "__main__":
     unittest.main()
