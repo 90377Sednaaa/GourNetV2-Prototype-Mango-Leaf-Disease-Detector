@@ -242,16 +242,18 @@ def main():
         if img is None:
             st.info("Upload or select a mango leaf photo above to begin comparative inference.")
         else:
-            col_preview, col_meta = st.columns([1, 2])
-            with col_preview:
-                st.image(img, caption=img_source_desc or "Target Leaf Image", width="stretch")
-            with col_meta:
-                with st.container(border=True):
-                    st.markdown("**Image Metadata**")
-                    st.write(f"• **Dimensions:** {img.size[0]} × {img.size[1]} px")
-                    st.write(f"• **Color Mode:** {img.mode}")
-                    st.write(f"• **Format:** {img.format or 'Image File'}")
-                    st.write(f"• **Inference Input Shape:** {IMG_SIZE[0]} × {IMG_SIZE[1]} × 3")
+            with st.container(border=True):
+                col_preview, col_meta = st.columns([1, 1], vertical_alignment="center")
+                with col_preview:
+                    st.image(img, caption=img_source_desc or "Target Leaf Image", use_container_width=True)
+                with col_meta:
+                    st.markdown("### Leaf Image Details")
+                    m1, m2 = st.columns(2)
+                    m1.metric("Dimensions", f"{img.size[0]} × {img.size[1]} px")
+                    m2.metric("Color Mode", str(img.mode))
+                    m3, m4 = st.columns(2)
+                    m3.metric("Format", str(img.format or "JPEG"))
+                    m4.metric("Inference Input", f"{IMG_SIZE[0]} × {IMG_SIZE[1]} × 3")
 
             batch = preprocess_image(img)
             results = {}

@@ -56,11 +56,11 @@ def render_hero_header():
     st.markdown(
         """
         <div style="margin-bottom: 0.75rem;">
-            <h1 style="margin: 0; padding: 0; font-size: 2.2rem; font-weight: 700; color: var(--hero-title-color, #0F5132); display: flex; align-items: center; gap: 0.5rem;">
-                🌿 GourNet Mango Leaf Disease Detector
+            <h1 style="margin: 0; padding: 0; font-size: 2.2rem; font-weight: 800; color: var(--text-color, inherit); display: flex; align-items: center; gap: 0.6rem;">
+                🌿 <span style="color: #10B981;">GourNet</span> Mango Leaf Disease Detector
             </h1>
             <p class="header-subtext" style="margin-top: 0.35rem;">
-                Comparative Botanical Deep Learning Prototype & Benchmarking Dashboard
+                Comparative Botanical Deep Learning Prototype &amp; Benchmarking Dashboard
                 <span class="status-pill" style="margin-left: 0.5rem;">Baseline vs v2</span>
                 <span class="status-pill">8 Disease Classes</span>
             </p>
@@ -93,7 +93,7 @@ def render_model_status_ribbon(
             with st.container(border=True):
                 header_html = f"""
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
-                    <span style="font-weight: 700; font-size: 1.1rem; color: inherit;">{short_name}</span>
+                    <span style="font-weight: 700; font-size: 1.15rem; color: var(--text-color, inherit);">{short_name}</span>
                     <span class="status-pill{' warning' if not is_trained else ''}">
                         {'● Trained' if is_trained else '⚠ Fallback / Missing'}
                     </span>
@@ -108,7 +108,7 @@ def render_model_status_ribbon(
                 if "v2" in short_name.lower():
                     c1.metric("Parameters", param_str, delta="~7x smaller (-85.6%)", delta_color="off")
                 else:
-                    c1.metric("Parameters", param_str)
+                    c1.metric("Parameters", param_str, delta="Baseline reference", delta_color="off")
 
                 c2.metric("Size", f"{size_mb:.1f} MB" if size_mb > 0 else "N/A")
                 c3.metric("Weights", variant)
@@ -143,10 +143,10 @@ def render_consensus_banner(
     st.markdown(
         f"""
         <div class="{css_class}">
-            <div style="font-weight: 700; font-size: 1.05rem; margin-bottom: 0.25rem;">
-                {icon} {title}
+            <div class="banner-title">
+                <span>{icon}</span> <span>{title}</span>
             </div>
-            <div style="font-size: 0.95rem; opacity: 0.95;">
+            <div class="banner-detail">
                 {detail}
             </div>
         </div>
